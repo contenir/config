@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Contenir\Config\Writer;
 
 use Contenir\Config\Exception\WriteException;
+use Webimpress\SafeWriter\Exception\ExceptionInterface as SafeWriterException;
+use Webimpress\SafeWriter\FileWriter;
 
 /**
  * PHP-array config file writer.
@@ -12,8 +14,10 @@ use Contenir\Config\Exception\WriteException;
  * Adapted from Laminas\Config\Writer\PhpArray. Differences from the original:
  *
  * - Defaults to PHP 5.4+ short-array syntax (`[]`).
- * - Writes atomically via tmp file + `rename()` so a partial write is never
- *   visible to readers.
+ * - Persists via webimpress/safe-writer so writes are serialised across
+ *   processes (flock on a sidecar lock file) and atomically swapped into
+ *   place — partial writes are never visible to readers, and concurrent
+ *   writers don't race during the temp-write/rename window.
  * - Invalidates the file's cached opcode after a successful write so
  *   long-running PHP-FPM workers don't serve stale state.
  * - Drops FQN-to-classname-scalar resolution, Windows path escaping, and
@@ -34,8 +38,7 @@ final class PhpArray
      *
      * @param array<array-key, mixed> $config
      * @throws WriteException on failure to create the parent directory,
-     *                        write the temp file, or atomically swap into
-     *                        place.
+     *                        write to it, or atomically swap into place.
      */
     public static function toFile(string $filename, array $config, string $label = 'config'): void
     {
@@ -46,14 +49,24 @@ final class PhpArray
             throw new WriteException(sprintf('Cannot create %s directory "%s".', $label, $dir));
         }
 
-        $tmp = $filename . '.tmp';
-        if (@file_put_contents($tmp, $contents, LOCK_EX) === false) {
-            throw new WriteException(sprintf('Cannot write %s to "%s".', $label, $tmp));
+        /**
+         * Pre-check directory writability so the "Cannot write %s to" wording
+         * is preserved for the unwritable-parent case. safe-writer collapses
+         * temp-write and rename failures into a single exception type, so the
+         * post-write failure path is reported as an install error below.
+         */
+        if (! is_writable($dir)) {
+            throw new WriteException(sprintf('Cannot write %s to "%s".', $label, $filename));
         }
 
-        if (! @rename($tmp, $filename)) {
-            @unlink($tmp);
-            throw new WriteException(sprintf('Cannot install %s at "%s".', $label, $filename));
+        try {
+            FileWriter::writeFile($filename, $contents);
+        } catch (SafeWriterException $e) {
+            throw new WriteException(
+                sprintf('Cannot install %s at "%s".', $label, $filename),
+                0,
+                $e
+            );
         }
 
         if (\function_exists('opcache_invalidate')) {
