@@ -6,6 +6,10 @@ namespace Contenir\Config\Reader;
 
 use Throwable;
 
+use function is_array;
+use function is_file;
+use function is_readable;
+
 /**
  * Tolerant PHP-array config file reader.
  *
@@ -30,12 +34,17 @@ final class PhpArray
         }
 
         try {
-            /** @psalm-suppress UnresolvableInclude */
-            $data = include $filename;
+            return self::arrayOrEmpty(include $filename);
         } catch (Throwable) {
             return [];
         }
+    }
 
+    /**
+     * @return array<array-key, mixed>
+     */
+    private static function arrayOrEmpty(mixed $data): array
+    {
         return is_array($data) ? $data : [];
     }
 }

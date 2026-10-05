@@ -8,6 +8,24 @@ use Contenir\Config\Exception\WriteException;
 use Webimpress\SafeWriter\Exception\ExceptionInterface as SafeWriterException;
 use Webimpress\SafeWriter\FileWriter;
 
+use function array_is_list;
+use function array_keys;
+use function array_map;
+use function dirname;
+use function function_exists;
+use function implode;
+use function is_array;
+use function is_dir;
+use function is_int;
+use function is_writable;
+use function mkdir;
+use function opcache_invalidate;
+use function restore_error_handler;
+use function set_error_handler;
+use function sprintf;
+use function str_repeat;
+use function var_export;
+
 /**
  * PHP-array config file writer.
  *
@@ -28,7 +46,55 @@ use Webimpress\SafeWriter\FileWriter;
  */
 final class PhpArray
 {
-    private const INDENT = '    ';
+    private const string INDENT = '    ';
+
+    /**
+     * Recursively render any PHP value as source using short-array syntax.
+     *
+     * Round-trips scalars, null, and arbitrarily-nested arrays — necessary
+     * because consumers may preserve operator-authored data in keys they
+     * don't manage.
+     *
+     * @param positive-int $indent
+     */
+    public static function exportArray(mixed $value, int $indent = 1): string
+    {
+        if (! is_array($value)) {
+            return var_export(
+                value: $value,
+                return: true,
+            );
+        }
+
+        if ([] === $value) {
+            return '[]';
+        }
+
+        $isList   = array_is_list($value);
+        $pad      = str_repeat(self::INDENT, $indent);
+        $closePad = str_repeat(self::INDENT, $indent - 1);
+
+        $lines = array_map(
+            static fn(int|string $key, mixed $child): string => $isList
+                ? sprintf('%s%s,', $pad, self::exportArray($child, $indent + 1))
+                : sprintf('%s%s => %s,', $pad, self::exportKey($key), self::exportArray($child, $indent + 1)),
+            array_keys($value),
+            $value,
+        );
+
+        return implode("\n", ['[', ...$lines, "{$closePad}]"]);
+    }
+
+    /**
+     * Render a PHP-array config to source. Returns the full file contents
+     * including the `<?php` preamble and trailing semicolon.
+     *
+     * @param array<array-key, mixed> $config
+     */
+    public static function processConfig(array $config): string
+    {
+        return "<?php\n\nreturn " . self::exportArray($config) . ";\n";
+    }
 
     /**
      * Atomically write a PHP-array config file.
@@ -44,8 +110,8 @@ final class PhpArray
     {
         $contents = self::processConfig($config);
 
-        $dir = \dirname($filename);
-        if (! is_dir($dir) && ! @mkdir($dir, 0o755, true) && ! is_dir($dir)) {
+        $dir = dirname($filename);
+        if (! is_dir($dir) && ! self::createDirectory($dir) && ! is_dir($dir)) {
             throw new WriteException(sprintf('Cannot create %s directory "%s".', $label, $dir));
         }
 
@@ -62,62 +128,54 @@ final class PhpArray
         try {
             FileWriter::writeFile($filename, $contents);
         } catch (SafeWriterException $e) {
-            throw new WriteException(
-                sprintf('Cannot install %s at "%s".', $label, $filename),
-                0,
-                $e
+            throw new WriteException(sprintf('Cannot install %s at "%s".', $label, $filename), 0, $e);
+        }
+
+        self::invalidateOpcache($filename);
+    }
+
+    /**
+     * Create a directory tree, reporting failure through the return value
+     * rather than the warning mkdir() raises, so the caller can decide
+     * whether a concurrent writer created it in the meantime.
+     */
+    private static function createDirectory(string $dir): bool
+    {
+        set_error_handler(static fn(): bool => true);
+
+        try {
+            return mkdir($dir, permissions: 0o755, recursive: true);
+        } finally {
+            restore_error_handler();
+        }
+    }
+
+    private static function exportKey(int|string $key): string
+    {
+        return is_int($key)
+            ? (string) $key
+            : var_export(
+                value: $key,
+                return: true,
             );
-        }
-
-        if (\function_exists('opcache_invalidate')) {
-            @opcache_invalidate($filename, true);
-        }
     }
 
     /**
-     * Render a PHP-array config to source. Returns the full file contents
-     * including the `<?php` preamble and trailing semicolon.
-     *
-     * @param array<array-key, mixed> $config
+     * Drop the file's cached opcode. Best effort: opcache may be absent, or
+     * restricted by `opcache.restrict_api`, and neither should fail a write.
      */
-    public static function processConfig(array $config): string
+    private static function invalidateOpcache(string $filename): void
     {
-        return "<?php\n\nreturn " . self::exportArray($config) . ";\n";
-    }
-
-    /**
-     * Recursively render any PHP value as source using short-array syntax.
-     *
-     * Round-trips scalars, null, and arbitrarily-nested arrays — necessary
-     * because consumers may preserve operator-authored data in keys they
-     * don't manage.
-     */
-    public static function exportArray(mixed $value, int $indent = 1): string
-    {
-        if (! is_array($value)) {
-            return var_export($value, true);
+        if (! function_exists('opcache_invalidate')) {
+            return;
         }
 
-        if ($value === []) {
-            return '[]';
+        set_error_handler(static fn(): bool => true);
+
+        try {
+            opcache_invalidate($filename, force: true);
+        } finally {
+            restore_error_handler();
         }
-
-        $isList   = array_is_list($value);
-        $pad      = str_repeat(self::INDENT, $indent);
-        $closePad = str_repeat(self::INDENT, $indent - 1);
-
-        $lines = ['['];
-        foreach ($value as $key => $child) {
-            $exportedChild = self::exportArray($child, $indent + 1);
-            if ($isList) {
-                $lines[] = sprintf('%s%s,', $pad, $exportedChild);
-            } else {
-                $keyPart = is_int($key) ? (string) $key : var_export($key, true);
-                $lines[] = sprintf('%s%s => %s,', $pad, $keyPart, $exportedChild);
-            }
-        }
-        $lines[] = $closePad . ']';
-
-        return implode("\n", $lines);
     }
 }
