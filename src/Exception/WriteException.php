@@ -13,6 +13,4 @@ use RuntimeException;
  * Extends RuntimeException so existing `catch (RuntimeException)` sites in
  * consumers continue to work without code changes.
  */
-final class WriteException extends RuntimeException
-{
-}
+final class WriteException extends RuntimeException {}
