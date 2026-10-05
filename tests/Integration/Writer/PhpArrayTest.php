@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Contenir\Config\Tests\Integration\Writer;
 
 use Contenir\Config\Exception\WriteException;
+use Contenir\Config\Tests\TestAsset\RacingDirectoryStreamWrapper;
 use Contenir\Config\Tests\Trait\TemporaryDirectoryTrait;
 use Contenir\Config\Writer\PhpArray;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -13,9 +14,14 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use Webimpress\SafeWriter\Exception\ExceptionInterface as SafeWriterException;
 
+use function dirname;
+use function error_clear_last;
+use function error_get_last;
+use function fileperms;
 use function glob;
 use function mkdir;
 use function sprintf;
+use function umask;
 
 #[Group('integration')]
 #[Group('config')]
@@ -58,6 +64,39 @@ final class PhpArrayTest extends TestCase
         PhpArray::toFile($nested, ['x' => 1]);
 
         static::assertSame(['x' => 1], include $nested);
+    }
+
+    #[Test]
+    public function createsMissingParentDirectoriesWithOwnerWritableWorldReadablePermissions(): void
+    {
+        $nested   = $this->path('nested/config.php');
+        $previous = umask(0);
+
+        try {
+            PhpArray::toFile($nested, ['x' => 1]);
+        } finally {
+            umask($previous);
+        }
+
+        static::assertSame(0o755, fileperms(dirname($nested)) & 0o777);
+    }
+
+    #[Test]
+    public function doesNotLeakTheMkdirWarningWhenTheParentDirectoryCannotBeCreated(): void
+    {
+        $this->skipWhenRunningAsRoot();
+        mkdir($this->path('locked'), permissions: 0o555);
+        error_clear_last();
+
+        $thrown = null;
+        try {
+            PhpArray::toFile($this->path('locked/nested/config.php'), ['x' => 1]);
+        } catch (WriteException $e) {
+            $thrown = $e;
+        }
+
+        static::assertInstanceOf(WriteException::class, $thrown);
+        static::assertNull(error_get_last());
     }
 
     #[Test]
@@ -105,6 +144,26 @@ final class PhpArrayTest extends TestCase
         static::assertSame(['x' => 2], include $this->path());
     }
 
+    /**
+     * Another writer creating the directory between the existence check and
+     * mkdir() is not a failure: the write carries on to the writability check.
+     */
+    #[Test]
+    public function toleratesTheParentDirectoryBeingCreatedConcurrently(): void
+    {
+        RacingDirectoryStreamWrapper::register();
+        $filename = RacingDirectoryStreamWrapper::SCHEME . '://shared/config.php';
+
+        try {
+            $this->expectException(WriteException::class);
+            $this->expectExceptionMessage(sprintf('Cannot write config to "%s".', $filename));
+
+            PhpArray::toFile($filename, ['x' => 1]);
+        } finally {
+            RacingDirectoryStreamWrapper::unregister();
+        }
+    }
+
     #[Test]
     public function usesGenericWordingWithoutALabel(): void
     {
@@ -127,6 +186,7 @@ final class PhpArrayTest extends TestCase
             static::fail('Expected a WriteException.');
         } catch (WriteException $e) {
             static::assertSame(sprintf('Cannot install cache control at "%s".', $this->path()), $e->getMessage());
+            static::assertSame(0, $e->getCode());
             static::assertInstanceOf(SafeWriterException::class, $e->getPrevious());
         }
     }

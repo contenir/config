@@ -1,0 +1,41 @@
+{
+    "$schema": "vendor/infection/infection/resources/schema.json",
+    "source": {
+        "directories": ["src"]
+    },
+    "timeout": 10,
+    "threads": "max",
+    "logs": {
+        "text": "infection.log",
+        "summary": "summary.log",
+        "stryker": {
+            "badge": "/^(main|master)$/"
+        }
+    },
+    "mutators": {
+        "@default": true,
+        // opcache_invalidate() is a no-op unless opcache.enable_cli is on, and that
+        // setting is PHP_INI_SYSTEM, so no PHPUnit test can enable it. Dropping the
+        // call, or negating the function_exists() guard, is unobservable under test.
+        "MethodCallRemoval": {
+            "ignoreSourceCodeByRegex": ["self::invalidateOpcache\\(\\$filename\\);"]
+        },
+        "LogicalNot": {
+            "ignore": ["Contenir\\Config\\Writer\\PhpArray::invalidateOpcache"]
+        },
+        "FunctionCallRemoval": {
+            "ignore": ["Contenir\\Config\\Writer\\PhpArray::invalidateOpcache"]
+        },
+        // The silencing handler only matters when opcache_invalidate() warns, which it
+        // does solely under opcache.restrict_api (PHP_INI_SYSTEM, not settable in a test).
+        "TrueValue": {
+            "ignore": ["Contenir\\Config\\Writer\\PhpArray::invalidateOpcache"]
+        },
+        // opcache_invalidate() never throws for a string argument, so the finally
+        // block and a straight-line restore_error_handler() behave identically.
+        "UnwrapFinally": {
+            "ignore": ["Contenir\\Config\\Writer\\PhpArray::invalidateOpcache"]
+        }
+    },
+    "staticAnalysisTool": "mago"
+}

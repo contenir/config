@@ -71,6 +71,20 @@ final class PhpArrayTest extends TestCase
     }
 
     #[Test]
+    public function indentsArraysNestedInListsOneLevelPerDepth(): void
+    {
+        $expected = <<<'PHP'
+            [
+                [
+                    'a',
+                ],
+            ]
+            PHP;
+
+        static::assertSame($expected, PhpArray::exportArray([['a']]));
+    }
+
+    #[Test]
     public function indentsNestedArraysOneLevelPerDepth(): void
     {
         $expected = <<<'PHP'
