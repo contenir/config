@@ -53,6 +53,7 @@ composer static-analysis   # mago analyze
 composer test              # unit suite: pure rendering, no I/O
 composer test-integration  # integration suite: real filesystem in a temp directory
 composer test-coverage     # both suites, clover.xml for Codecov
+composer mutation-test     # Infection mutation testing over both suites
 ```
 
 ## License
