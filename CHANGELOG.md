@@ -12,6 +12,8 @@ and the php-db QA toolchain shared by all Contenir 2.x packages. See
 
 ### Changed
 
+- `LICENSE` names Contenir as the copyright holder, in line with the other
+  Contenir packages, and uses the standard MIT wording.
 - Requires PHP 8.3, 8.4 or 8.5. PHP 8.1 and 8.2 are no longer supported.
 - `Writer\PhpArray::toFile()` no longer uses the `@` operator. Warnings from
   creating the parent directory and from `opcache_invalidate()` (for example
