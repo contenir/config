@@ -1,18 +1,20 @@
-# contenir/config
+# contenir/contenir-config
 
-[![Continuous Integration](https://github.com/contenir/config/actions/workflows/continuous-integration.yml/badge.svg)](https://github.com/contenir/config/actions/workflows/continuous-integration.yml)
-[![codecov](https://codecov.io/gh/contenir/config/graph/badge.svg)](https://codecov.io/gh/contenir/config)
+Formerly `contenir/config`; the old package is abandoned in favour of this one.
+
+[![Continuous Integration](https://github.com/contenir/contenir-config/actions/workflows/continuous-integration.yml/badge.svg)](https://github.com/contenir/contenir-config/actions/workflows/continuous-integration.yml)
+[![codecov](https://codecov.io/gh/contenir/contenir-config/graph/badge.svg)](https://codecov.io/gh/contenir/contenir-config)
 
 Framework-agnostic PHP-array config file reader and writer for [Contenir CMS](https://github.com/contenir).
 
-Reads and writes the `<?php return [...];` config files that get merged into a Laminas/Mezzio site's configuration. Designed for the admin-writes / Site-reads pattern used by sibling packages like `contenir/cache`, `contenir/maintenance`, and `contenir/errors`.
+Reads and writes the `<?php return [...];` config files that get merged into a Laminas/Mezzio site's configuration. Designed for the admin-writes / Site-reads pattern used by sibling packages like `contenir/contenir-cache`, `contenir/contenir-maintenance`, and `contenir/contenir-errors`.
 
 The reader is tolerant — a missing, unreadable, or syntactically broken file resolves to an empty array rather than throwing, so first-run consumers can ask for state before any has been written. The writer is atomic — partial writes are never visible to readers, and concurrent writers can't race during the write/rename window.
 
 ## Install
 
 ```bash
-composer require contenir/config
+composer require contenir/contenir-config
 ```
 
 Requires PHP 8.3, 8.4 or 8.5. The 0.x releases, which support PHP 8.1, remain
