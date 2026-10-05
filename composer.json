@@ -1,5 +1,5 @@
 {
-  "name": "contenir/config",
+  "name": "contenir/contenir-config",
   "description": "Framework-agnostic PHP-array config file reader/writer with atomic writes and opcache invalidation. Adapted from Laminas\\Config.",
   "type": "library",
   "license": "MIT",
@@ -11,6 +11,9 @@
     "infection/infection": "^0.34.1",
     "php-db/phpdb-qa-tools": "0.1.x-dev",
     "phpunit/phpunit": "^11.5.42"
+  },
+  "replace": {
+    "contenir/config": "self.version"
   },
   "autoload": {
     "psr-4": {
@@ -55,7 +58,7 @@
   },
   "extra": {
     "branch-alias": {
-      "dev-main": "2.0.x-dev"
+      "dev-main": "2.1.x-dev"
     }
   },
   "minimum-stability": "dev",

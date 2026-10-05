@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "6eb8cc89aade0dcf69168078ac45098b",
+    "content-hash": "9a6b8bf29495726892312b47f6b64f40",
     "packages": [
         {
             "name": "webimpress/safe-writer",
